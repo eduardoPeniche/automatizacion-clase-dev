@@ -1,0 +1,19 @@
+# Entornos virtuales
+.venv/
+venv/
+.tests/
+
+# Python
+__pycache__/
+*.pyc
+
+# Cachés de herramientas
+.pytest_cache/
+.ruff_cache/
+
+# Resultados de pruebas y reportes (los genera el pipeline)
+test-results/
+reports/
+
+# Secretos locales
+.env

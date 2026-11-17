@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# El pipeline solo necesita leer el código
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    name: Calidad y pruebas
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v5
+
+      - name: Instalar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff (lint)
+        run: ruff check . --output-format=github
+
+      - name: Ruff (formato)
+        run: ruff format --check .
+
+      - name: Pruebas unitarias y de API
+        run: python -m pytest tests -v
+
+  e2e:
+    name: Pruebas end-to-end
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v5
+
+      - name: Instalar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependencias y navegador
+        run: |
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Construir y levantar la app
+        # --wait espera a que el healthcheck del compose diga "healthy"
+        run: docker compose up --build -d --wait
+
+      - name: Playwright
+        run: >
+          python -m pytest tests_e2e -v
+          --base-url http://localhost:8000
+          --tracing retain-on-failure
+          --screenshot only-on-failure
+          --output test-results
+
+      - name: Logs de la app (si algo falló)
+        if: failure()
+        run: docker compose logs
+
+      - name: Guardar trazas y capturas (si algo falló)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidencia
+          path: test-results/
+          retention-days: 7
+
+      - name: Apagar la app
+        if: always()
+        run: docker compose down
+
+  secretos:
+    name: Escaneo de secretos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código con todo el historial
+        uses: actions/checkout@v5
+        with:
+          # Un secreto borrado en un commit posterior sigue en el historial: hay que revisarlo completo
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # El token del pipeline es de solo lectura; los comentarios en el PR los hará n8n
+          GITLEAKS_ENABLE_COMMENTS: false

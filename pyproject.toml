@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F: errores básicos · B: bugs comunes · S: seguridad (Bandit) · C90: complejidad · UP: sintaxis moderna
+select = ["E", "F", "B", "S", "C90", "UP"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.per-file-ignores]
+# En pruebas, assert es lo correcto
+"tests/**" = ["S101"]
+"tests_e2e/**" = ["S101"]
+
+[tool.ruff.lint.flake8-bugbear]
+# En FastAPI, Query() como valor por defecto es el patrón correcto, no un bug
+extend-immutable-calls = ["fastapi.Query", "fastapi.Depends", "fastapi.Body"]

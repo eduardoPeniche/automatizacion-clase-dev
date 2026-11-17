@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversor de temperaturas</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Conversor de temperaturas</h1>
+
+    <form id="formulario">
+      <div class="fila">
+        <label for="valor">Valor</label>
+        <input id="valor" name="valor" type="number" step="any" required>
+      </div>
+      <div class="fila doble">
+        <div>
+          <label for="de">De</label>
+          <select id="de" name="de">
+            <option value="C">Celsius (°C)</option>
+            <option value="F">Fahrenheit (°F)</option>
+            <option value="K">Kelvin (K)</option>
+          </select>
+        </div>
+        <div>
+          <label for="a">A</label>
+          <select id="a" name="a">
+            <option value="C">Celsius (°C)</option>
+            <option value="F" selected>Fahrenheit (°F)</option>
+            <option value="K">Kelvin (K)</option>
+          </select>
+        </div>
+      </div>
+      <div class="fila">
+        <label for="etiqueta">Etiqueta (opcional)</label>
+        <input id="etiqueta" name="etiqueta" type="text" maxlength="40" placeholder="Ej. horno, laboratorio">
+      </div>
+      <button type="submit" id="convertir">Convertir</button>
+    </form>
+
+    <p id="resultado" role="status" aria-live="polite"></p>
+
+    <section>
+      <h2>Historial</h2>
+      <ul id="historial"></ul>
+    </section>
+  </main>
+</body>
+</html>

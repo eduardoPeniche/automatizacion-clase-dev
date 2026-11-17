@@ -1,0 +1,14 @@
+# Configuración de gitleaks: reglas por defecto + una regla propia del proyecto.
+title = "Conversor de temperaturas"
+
+[extend]
+# Conserva las más de 150 reglas que trae gitleaks (AWS, GitHub, Google, Slack, ...)
+useDefault = true
+
+# Regla propia: las API keys del conversor tienen el formato tc_live_ + 32 caracteres.
+# Sirve para mostrar que cada equipo puede enseñarle a gitleaks sus propios secretos.
+[[rules]]
+id = "conversor-api-key"
+description = "API key del conversor de temperaturas"
+regex = '''tc_live_[0-9a-zA-Z]{32}'''
+keywords = ["tc_live_"]

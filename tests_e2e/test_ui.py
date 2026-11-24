@@ -39,11 +39,33 @@ def test_por_debajo_del_cero_absoluto_muestra_error(page: Page):
     expect(page.get_by_role("status")).to_contain_text("cero absoluto")
 
 
-def test_regresion_xss_la_etiqueta_se_muestra_como_texto(page: Page):
-    # Regresión del XSS de la Unidad II: la etiqueta nunca debe interpretarse como HTML.
+def test_regresion_xss_capa_servidor_rechaza_la_etiqueta(page: Page):
+    # Capa 1 de la defensa: el servidor no acepta HTML en la etiqueta.
+    marca = uuid.uuid4().hex[:6]
+    convertir(page, "1", "C", "C", f'<img src=x id="xss-{marca}">')
+
+    expect(page.get_by_role("status")).to_contain_text("letras, números")
+    expect(page.locator(f"#xss-{marca}")).to_have_count(0)
+
+
+def test_regresion_xss_capa_frontend_muestra_la_etiqueta_como_texto(page: Page):
+    # Capa 2 de la defensa: aunque el servidor dejara pasar HTML, el frontend no lo interpreta.
+    # Simulamos esa respuesta del servidor interceptando la petición con page.route.
     marca = uuid.uuid4().hex[:6]
     etiqueta = f'<img src=x id="xss-{marca}">'
-    convertir(page, "1", "C", "C", etiqueta)
+    falsa = [
+        {
+            "id": 1,
+            "valor": 1,
+            "de": "C",
+            "a": "C",
+            "resultado": 1,
+            "etiqueta": etiqueta,
+            "fecha": "2026-01-01T00:00:00Z",
+        }
+    ]
+    page.route("**/conversiones?limite=10", lambda ruta: ruta.fulfill(json=falsa))
+    page.goto("/")
 
     primero = page.locator("#historial li").first
     expect(primero).to_contain_text(etiqueta)  # se ve el texto literal

@@ -1,0 +1,10 @@
+# Política de ZAP: qué hacer con cada alerta. Formato: id<TAB>ACCIÓN<TAB>(justificación)
+# Las alertas que no aparecen aquí quedan en WARN: se reportan pero no rompen el pipeline.
+40018	FAIL	(Inyección SQL)
+40012	FAIL	(XSS reflejado)
+40014	FAIL	(XSS persistente: regresión de la Unidad II)
+90019	FAIL	(Inyección de código en el servidor)
+90020	FAIL	(Inyección de comandos del sistema operativo)
+6	FAIL	(Path traversal)
+7	FAIL	(Inclusión remota de archivos)
+10049	IGNORE	(Contenido no almacenable en caché: es intencional, la API responde Cache-Control: no-store)

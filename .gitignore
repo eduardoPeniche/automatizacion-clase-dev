@@ -17,3 +17,6 @@ reports/
 
 # Secretos locales
 .env
+
+# macOS
+.DS_Store

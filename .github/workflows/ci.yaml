@@ -103,3 +103,55 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # El token del pipeline es de solo lectura; los comentarios en el PR los hará n8n
           GITLEAKS_ENABLE_COMMENTS: false
+
+  zap:
+    name: Seguridad dinámica (ZAP)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v5
+
+      - name: Construir y levantar la app
+        run: docker compose up --build -d --wait
+
+      - name: Preparar carpeta de trabajo de ZAP
+        # El contenedor de ZAP corre con otro usuario: necesita permiso para escribir los reportes
+        run: |
+          mkdir -p reports/zap
+          cp .zap/rules.tsv reports/zap/
+          chmod -R a+rwx reports/zap
+
+      - name: Escaneo de la API con ZAP
+        # -f openapi: ZAP lee el OpenAPI para conocer todos los endpoints y sus parámetros
+        # -c rules.tsv: la política (FAIL / WARN / IGNORE) de cada alerta
+        # -I: las alertas WARN no rompen el pipeline; solo las FAIL
+        run: >
+          docker run --rm --network host
+          -v "$PWD/reports/zap:/zap/wrk:rw"
+          ghcr.io/zaproxy/zaproxy:stable
+          zap-api-scan.py
+          -t http://localhost:8000/openapi.json
+          -f openapi
+          -c rules.tsv
+          -r zap-reporte.html
+          -J zap-reporte.json
+          -I
+
+      - name: Guardar reportes de ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reportes
+          path: |
+            reports/zap/zap-reporte.html
+            reports/zap/zap-reporte.json
+          retention-days: 7
+
+      - name: Logs de la app (si algo falló)
+        if: failure()
+        run: docker compose logs
+
+      - name: Apagar la app
+        if: always()
+        run: docker compose down

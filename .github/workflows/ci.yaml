@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Permite lanzar el pipeline a mano (pestaña Actions) o desde n8n (flujo 2)
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Quién o qué lanzó la ejecución (por ejemplo: n8n)"
+        required: false
+        default: "manual"
+        type: string
 
 # El pipeline solo necesita leer el código
 permissions:
@@ -14,6 +22,9 @@ jobs:
   calidad:
     name: Calidad y pruebas
     runs-on: ubuntu-latest
+    outputs:
+      ruff_hallazgos: ${{ steps.salidas.outputs.ruff_hallazgos }}
+      pruebas_fallidas: ${{ steps.salidas.outputs.pruebas_fallidas }}
 
     steps:
       - name: Obtener el código
@@ -32,15 +43,27 @@ jobs:
       - name: Ruff (lint)
         run: ruff check . --output-format=github
 
+      # !cancelled(): aunque Ruff falle, las pruebas corren igual, para que el resumen tenga todo
       - name: Ruff (formato)
+        if: ${{ !cancelled() }}
         run: ruff format --check .
 
       - name: Pruebas unitarias y de API
-        run: python -m pytest tests -v
+        if: ${{ !cancelled() }}
+        run: python -m pytest tests -v --junitxml=reports/pytest.xml
+
+      - name: Datos para el resumen
+        id: salidas
+        if: ${{ !cancelled() }}
+        run: |
+          echo "ruff_hallazgos=$(ruff check . --output-format=json --exit-zero | python scripts/ci_salidas.py contar)" >> "$GITHUB_OUTPUT"
+          echo "pruebas_fallidas=$(python scripts/ci_salidas.py fallidas reports/pytest.xml)" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: Pruebas end-to-end
     runs-on: ubuntu-latest
+    outputs:
+      pruebas_fallidas: ${{ steps.salidas.outputs.pruebas_fallidas }}
 
     steps:
       - name: Obtener el código
@@ -69,6 +92,12 @@ jobs:
           --tracing retain-on-failure
           --screenshot only-on-failure
           --output test-results
+          --junitxml=reports/e2e.xml
+
+      - name: Datos para el resumen
+        id: salidas
+        if: ${{ !cancelled() }}
+        run: echo "pruebas_fallidas=$(python scripts/ci_salidas.py fallidas reports/e2e.xml)" >> "$GITHUB_OUTPUT"
 
       - name: Logs de la app (si algo falló)
         if: failure()
@@ -76,7 +105,7 @@ jobs:
 
       - name: Guardar trazas y capturas (si algo falló)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-evidencia
           path: test-results/
@@ -86,27 +115,11 @@ jobs:
         if: always()
         run: docker compose down
 
-  secretos:
-    name: Escaneo de secretos
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Obtener el código con todo el historial
-        uses: actions/checkout@v5
-        with:
-          # Un secreto borrado en un commit posterior sigue en el historial: hay que revisarlo completo
-          fetch-depth: 0
-
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # El token del pipeline es de solo lectura; los comentarios en el PR los hará n8n
-          GITLEAKS_ENABLE_COMMENTS: false
-
   zap:
     name: Seguridad dinámica (ZAP)
     runs-on: ubuntu-latest
+    outputs:
+      alertas: ${{ steps.salidas.outputs.alertas }}
 
     steps:
       - name: Obtener el código
@@ -138,9 +151,14 @@ jobs:
           -J zap-reporte.json
           -I
 
+      - name: Datos para el resumen
+        id: salidas
+        if: ${{ !cancelled() }}
+        run: echo "alertas=$(python3 scripts/ci_salidas.py zap reports/zap/zap-reporte.json .zap/rules.tsv)" >> "$GITHUB_OUTPUT"
+
       - name: Guardar reportes de ZAP
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: zap-reportes
           path: |
@@ -155,3 +173,55 @@ jobs:
       - name: Apagar la app
         if: always()
         run: docker compose down
+
+  secretos:
+    name: Escaneo de secretos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código con todo el historial
+        uses: actions/checkout@v5
+        with:
+          # Un secreto borrado en un commit posterior sigue en el historial: hay que revisarlo completo
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # El token del pipeline es de solo lectura; los comentarios en el PR los hará n8n
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  veredicto:
+    name: Veredicto
+    # Espera a las cuatro etapas y corre aunque alguna haya fallado
+    needs: [calidad, e2e, zap, secretos]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v5
+
+      - name: Generar resumen.json
+        # Los datos llegan por variables de entorno, nunca escritos dentro del script:
+        # el nombre de la rama y el motivo los controla quien lanza la ejecución.
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          RAMA: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          MOTIVO: ${{ inputs.motivo }}
+        run: |
+          python3 scripts/resumen.py generar > resumen.json
+          cat resumen.json
+
+      - name: Guardar resumen.json
+        uses: actions/upload-artifact@v6
+        with:
+          name: resumen
+          path: resumen.json
+          retention-days: 30
+
+      - name: Decidir
+        run: python3 scripts/resumen.py verificar resumen.json

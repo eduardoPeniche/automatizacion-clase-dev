@@ -45,7 +45,8 @@ class ConversionOut(BaseModel):
 
 
 class LoteIn(BaseModel):
-    valores: list[Temperatura] = Field(min_length=1, max_length=MAX_LOTE)
+    # Sin límite superior para soportar lotes grandes
+    valores: list[Temperatura] = Field(min_length=1)
     de: Escala
     a: Escala
     decimales: int = Field(default=2, ge=0, le=6)

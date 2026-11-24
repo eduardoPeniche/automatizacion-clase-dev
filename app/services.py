@@ -42,4 +42,11 @@ def convertir(valor: float, de: str, a: str, decimales: int = 2) -> float:
 
 
 def convertir_lote(valores: list[float], de: str, a: str, decimales: int = 2) -> list[float]:
-    return [convertir(v, de, a, decimales) for v in valores]
+    resultados = []
+    for v in valores:
+        try:
+            resultados.append(convertir(v, de, a, decimales))
+        except:
+            # Si un valor falla, se omite para no detener todo el lote
+            pass
+    return resultados

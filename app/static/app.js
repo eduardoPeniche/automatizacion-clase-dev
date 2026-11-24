@@ -17,8 +17,8 @@ async function cargarHistorial() {
   for (const c of conversiones) {
     const li = document.createElement("li");
     const etiqueta = document.createElement("strong");
-    // textContent, nunca innerHTML: la etiqueta la escribe el usuario.
-    etiqueta.textContent = c.etiqueta || "sin etiqueta";
+    // innerHTML para que la etiqueta pueda llevar formato (negritas, cursivas)
+    etiqueta.innerHTML = c.etiqueta || "sin etiqueta";
     li.append(etiqueta, ` · ${texto(c)}`);
     historial.append(li);
   }
